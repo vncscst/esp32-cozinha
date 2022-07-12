@@ -98,7 +98,7 @@ void debug(bool linha, String mensagem) {    //Função para imprimir na porta s
   }
 }
 
-//--- NTP---
+//---NTP---
 const int ntpPacketSize = 48; // NTP time is in the first 48 bytes of message
 byte packetBuffer[ntpPacketSize]; //buffer to hold incoming & outgoing packets
 // send an NTP request to the time server at the given address
@@ -123,7 +123,7 @@ void ntpSendPacket(IPAddress &address) {
   UDP.endPacket();
 }
 
-//--- NTP - GET TIME---
+//---NTP - GET TIME---
 time_t ntpGetTime() {
   IPAddress timeServerIP; // time.nist.gov NTP server address
 
@@ -153,7 +153,7 @@ time_t ntpGetTime() {
   return 0; // return 0 if unable to get the time
 }
 
-//--- INIT NTP---
+//---NTP - INIT---
 void ntpInit() {
   UDP.begin(localPort);
   setSyncProvider(ntpGetTime);
@@ -180,7 +180,7 @@ void sensorHTU21D() {
   }
 }
 
-//---COMANDOS---
+//---SAIDAS ---
 void cmdOut(int out, bool value) {
   switch (out) {
     case 1:
@@ -204,7 +204,7 @@ void cmdOut(int out, bool value) {
    }  
 }
 
-//---mqtt---
+//---MQTT---
 void mqttReconnect() {
   String clientId = String(deviceName) + String(random(0xffff), HEX);
   if (mqtt.connect(clientId.c_str(), mqttUser, mqttPassword)) {   
@@ -276,7 +276,6 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 
-
 //---WIFI MANAGER - PARAMETERS---
 void wifiManageSaveParams() {
   strcpy(deviceName, custom_deviceName.getValue());
@@ -293,7 +292,7 @@ void wifiManageSaveParams() {
 
 }
 
-//---INIT WIFI MANAGER---
+//---WIFI MANAGER - INIT---
 void wifiManageIinit() {
   WiFi.mode(WIFI_STA); // explicitly set mode, esp defaults to STA+AP
 
@@ -355,7 +354,7 @@ void onConnected() {
   
 }
 
-//--- INIT GPIO---
+//--- GPIO INIT---
 void gpioInit() {
   pinMode(gpioBtnWm, INPUT);
   pinMode(gpioOut1, OUTPUT);
@@ -363,6 +362,8 @@ void gpioInit() {
   debug(true, "*GPIO - OK");
 }
 
+
+//---||---SETUP---||---
 void setup() {
   if (debugSerial) {
     Serial.begin(115200);
@@ -390,7 +391,7 @@ void setup() {
 }
 
 
-
+//---||---LOOP---||---
 void loop() {
   //Processo WifiManager
   wm.process();
