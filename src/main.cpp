@@ -9,8 +9,8 @@
 #define gpioDht2 5
 
 //DEVICE SETUP
-char deviceName[] = "ModuloCozinha";
-char deviceId[] = "ModuloCozinha";
+char deviceName[50] = "modulo_cozinha";
+char deviceId[50] = "modulo_cozinha";
 unsigned long currentMillis;
 
 //DEBUG
@@ -36,12 +36,12 @@ char mqttPassword[] = "vine3561";
 char mqttStatTopicSfx[] = "/stat";
 char mqttCmdTopicSfx[] = "/cmnd";
 char mqttLwtTopicSfx[] = "/tele";
-char mqttStatTopic[] = "device_name/stat_sfx";
-char mqttCmdTopic[] = "device_name/cmnd_sfx";
-char mqttLwtTopic[] = "device_name/lwt_sfx";
-int mqttReconnectInterval = 300000;
+char mqttStatTopic[50] = "device_name/stat_sfx";
+char mqttCmdTopic[50] = "device_name/cmnd_sfx";
+char mqttLwtTopic[50] = "device_name/lwt_sfx";
+int mqttReconnectInterval = 5000;
 unsigned long mqttReconnectPreviousMillis = 0;
-int mqttStatInterval = 3000;
+int mqttStatInterval = 60000;
 unsigned long mqttStatPreviousMillis = 0;
 WiFiClient espClient;
 PubSubClient mqtt(espClient);
@@ -143,7 +143,7 @@ void sensorHTU21D() {
     float temp = htu.readTemperature();
     float hum = htu.readHumidity();
     
-    if (not(isnan(temp) || isnan(hum))) {
+    if ((temp != 0) ||  (hum != 0)) {
       sensorTemperature = temp;
       sensorHumidity = hum;
       debug(false, "*HTU21D - Temperatura: " + String(sensorTemperature) + " ºC - ");
@@ -185,25 +185,19 @@ void cmdOut(int out, bool value) {
 void mqttReconnect() {
   String clientId = String(deviceName) + String(random(0xffff), HEX);
   if (mqtt.connect(clientId.c_str(), mqttUser, mqttPassword)) {   
-    //availability_topic
-    sprintf(mqttLwtTopic, "%s%s",deviceName, mqttLwtTopicSfx);
-    debug(true, "*MQTT - LWT TOPIC: " + String(mqttLwtTopic));
-    //stat_topic  
-    sprintf(mqttStatTopic, "%s%s",deviceName, mqttStatTopicSfx);
-    debug(true, "*MQTT - STAT TOPIC: " + String(mqttStatTopic));
-    //command_topic
-    sprintf(mqttCmdTopic, "%s%s/#", deviceName, mqttCmdTopicSfx);
-    debug(true, "*MQTT - CMD TOPIC: " + String(mqttCmdTopic));
-
+    
+    debug(false, "*MQTT - LWT TOPIC: " + String(mqttLwtTopic) + " - ");
+    debug(true, "ONLINE");
     mqtt.publish(mqttLwtTopic, "Online", true);
 
+    debug(true, "*MQTT - STAT TOPIC: " + String(mqttStatTopic));
+    debug(true, "*MQTT - CMD TOPIC: " + String(mqttCmdTopic));
+
     mqtt.subscribe(mqttCmdTopic);
-    debug(true, "*MQTT - OK");
   } else {
     debug(false, "*MQTT - ERRO -> ");
     debug(true, String(mqtt.state()));
   }
-  mqttReconnectPreviousMillis = currentMillis;
 }
 
 void mqttPublishStat() {
@@ -213,7 +207,7 @@ void mqttPublishStat() {
   // INFO: the data must be converted into a string; a problem occurs when using floats...
   doc["DeviceName"] = String(deviceName);
   doc["DateTime"] = String(now());
-  doc["Temperatua"] = String(sensorTemperature);
+  doc["Temperatura"] = String(sensorTemperature);
   doc["Umidade"] = String(sensorHumidity);
   doc["Saida1"] = out1;
   doc["Saida2"] = out2;
@@ -221,10 +215,14 @@ void mqttPublishStat() {
   char msg[1024];
   serializeJson(doc, msg);
 
-  debug(false, "*MQTT - STAT TOPIC: " + String(mqttStatTopic));
+  char mqttStatTopicAux[50];
+ 
+  strcpy(mqttStatTopicAux, mqttStatTopic);
+
+  debug(false, "*MQTT - STAT TOPIC: " + String(mqttStatTopicAux));
   debug(false, " - MSG: " + String(msg));
     
-  if (mqtt.publish(mqttStatTopic, msg)) {
+  if (mqtt.publish(mqttStatTopicAux, msg)) {
     debug(true, " - OK");
   } else {
     debug(true, " - ERRRO");
@@ -308,17 +306,33 @@ void onConnected() {
     ntpInit();
     
     //MQTT
+    //availability_topic
+    sprintf(mqttLwtTopic, "%s%s",deviceName, mqttLwtTopicSfx);
+    debug(true, "*MQTT - LWT TOPIC: " + String(mqttLwtTopic));
+    //stat_topic  
+    sprintf(mqttStatTopic, "%s%s",deviceName, mqttStatTopicSfx);
+    debug(true, "*MQTT - STAT TOPIC: " + String(mqttStatTopic));
+    //command_topic
+    sprintf(mqttCmdTopic, "%s%s/#", deviceName, mqttCmdTopicSfx);
+    debug(true, "*MQTT - CMD TOPIC: " + String(mqttCmdTopic));
+
     mqtt.setServer(mqttServer, atoi(mqttPort));   //informa qual broker e porta deve ser conectado
     mqtt.setCallback(mqttCallback);
     mqttReconnect();
     deviceConnectedFistScan = false;
-    debug(true, "*WIFI - FirtScan - OK");
+    mqtt.loop();
+    if (mqtt.connected()) {
+      debug(true, "*WIFI - MQTT - CONECTADO");
+      mqttPublishStat();
+    } else {
+      debug(true, "*WIFI - MQTT - DESCONECTADO");
+    }
+    debug(true, "*WIFI - FIRSTSCAN - OK");
   }
-
 
   //MQTT
   if (mqtt.connected()) {
-    mqtt.loop();
+    //Publicação do status
     if (currentMillis - mqttStatPreviousMillis > mqttStatInterval) {
       mqttPublishStat();
       mqttStatPreviousMillis = currentMillis;
@@ -326,8 +340,12 @@ void onConnected() {
   } else {
     if (currentMillis - mqttReconnectPreviousMillis > mqttReconnectInterval) {
       mqttReconnect();
+      debug(true, "*WIFI - MQTT - RECONECTANDO");
+      mqttReconnectPreviousMillis = currentMillis;
     }
   }
+
+  mqtt.loop();
   
 }
 
@@ -381,6 +399,8 @@ void loop() {
   //Dispositivo conectado
   if (WiFi.status() == WL_CONNECTED){
     onConnected();
+  } else {
+    debug(true, "*WIFI - DESCONECTADO");
   }
   
   yield();
